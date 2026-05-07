@@ -1,0 +1,477 @@
+{
+  "datasets": [
+    {
+      "name": "freshness",
+      "displayName": "Freshness + latency",
+      "queryLines": [
+        "SELECT\n",
+        "  COUNT_IF(ingestion_time >= current_timestamp() - INTERVAL 5 MINUTES) AS rows_total,\n",
+        "  MAX(ingestion_time) AS last_ingested_at,\n",
+        "  ROUND((unix_timestamp(current_timestamp()) - unix_timestamp(MAX(ingestion_time))), 2) AS seconds_since_last_row,\n",
+        "  ROUND(percentile_approx(unix_timestamp(ingestion_time) - unix_timestamp(event_time), 0.50), 3) AS e2e_latency_p50_s,\n",
+        "  ROUND(percentile_approx(unix_timestamp(ingestion_time) - unix_timestamp(event_time), 0.95), 3) AS e2e_latency_p95_s\n",
+        "FROM karthik_auto_validator_1.iot.sensor_readings_clean"
+      ]
+    },
+    {
+      "name": "throughput",
+      "displayName": "Throughput rollups",
+      "queryLines": [
+        "SELECT\n",
+        "  COUNT(CASE WHEN ingestion_time >= current_timestamp() - INTERVAL 1  MINUTES THEN 1 END) AS rows_1m,\n",
+        "  COUNT(CASE WHEN ingestion_time >= current_timestamp() - INTERVAL 5  MINUTES THEN 1 END) AS rows_5m,\n",
+        "  COUNT(CASE WHEN ingestion_time >= current_timestamp() - INTERVAL 60 MINUTES THEN 1 END) AS rows_60m,\n",
+        "  ROUND(COUNT(CASE WHEN ingestion_time >= current_timestamp() - INTERVAL 1 MINUTES THEN 1 END) / 60.0, 1) AS events_per_second_1m\n",
+        "FROM karthik_auto_validator_1.iot.sensor_readings_clean"
+      ]
+    },
+    {
+      "name": "minute_trends",
+      "displayName": "Per-minute trends",
+      "queryLines": [
+        "SELECT window_start, site, sensor_type, avg_value, n_readings, n_alerts\n",
+        "FROM karthik_auto_validator_1.iot.sensor_minute_agg\n",
+        "WHERE window_start >= current_timestamp() - INTERVAL 30 MINUTES"
+      ]
+    },
+    {
+      "name": "anomalies_recent",
+      "displayName": "Recent anomalies",
+      "queryLines": [
+        "SELECT event_time, device_id, site, sensor_type, reading_value, unit, status\n",
+        "FROM karthik_auto_validator_1.iot.sensor_anomalies\n",
+        "WHERE event_time >= current_timestamp() - INTERVAL 30 MINUTES\n",
+        "ORDER BY event_time DESC\n",
+        "LIMIT 100"
+      ]
+    },
+    {
+      "name": "anomalies_by_sensor",
+      "displayName": "Anomalies by sensor",
+      "queryLines": [
+        "SELECT sensor_type, COUNT(*) AS n_anomalies\n",
+        "FROM karthik_auto_validator_1.iot.sensor_anomalies\n",
+        "WHERE event_time >= current_timestamp() - INTERVAL 30 MINUTES\n",
+        "GROUP BY sensor_type\n",
+        "ORDER BY n_anomalies DESC"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Zerobus IoT — Live",
+      "layout": [
+        {
+          "widget": {
+            "name": "w_rows_total",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "freshness",
+                  "fields": [
+                    {
+                      "name": "rows_total",
+                      "expression": "`rows_total`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": "Total rows processed",
+                "description": "Last 5 mins"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "rows_total",
+                  "displayName": "Rows ingested (last 5m)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "w_events_per_sec",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "throughput",
+                  "fields": [
+                    {
+                      "name": "events_per_second_1m",
+                      "expression": "`events_per_second_1m`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Events per second in the last minute"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "events_per_second_1m",
+                  "displayName": "Events / second (1m)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "w_latency_p95",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "freshness",
+                  "fields": [
+                    {
+                      "name": "e2e_latency_p95_s",
+                      "expression": "`e2e_latency_p95_s`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "P95 Latency"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "e2e_latency_p95_s",
+                  "displayName": "E2E latency p95 (s)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "w_seconds_since",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "freshness",
+                  "fields": [
+                    {
+                      "name": "seconds_since_last_row",
+                      "expression": "`seconds_since_last_row`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Seconds since last row"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "seconds_since_last_row",
+                  "displayName": "Sec since last row"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "w_trends",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "minute_trends",
+                  "fields": [
+                    {
+                      "name": "window_start",
+                      "expression": "`window_start`"
+                    },
+                    {
+                      "name": "avg_value",
+                      "expression": "`avg_value`"
+                    },
+                    {
+                      "name": "sensor_type",
+                      "expression": "`sensor_type`"
+                    },
+                    {
+                      "name": "site",
+                      "expression": "`site`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "window_start",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Window start"
+                },
+                "y": {
+                  "fieldName": "avg_value",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Avg reading"
+                },
+                "color": {
+                  "fieldName": "sensor_type",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Sensor"
+                }
+              },
+              "frame": {
+                "title": "Avg reading / minute by sensor",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 8,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "w_anom_by_sensor",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "anomalies_by_sensor",
+                  "fields": [
+                    {
+                      "name": "sensor_type",
+                      "expression": "`sensor_type`"
+                    },
+                    {
+                      "name": "n_anomalies",
+                      "expression": "`n_anomalies`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sensor_type",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Sensor"
+                },
+                "y": {
+                  "fieldName": "n_anomalies",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "# anomalies (30m)"
+                }
+              },
+              "frame": {
+                "title": "Anomalies by sensor (last 30m)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "w_anom_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "anomalies_recent",
+                  "fields": [
+                    {
+                      "name": "event_time",
+                      "expression": "`event_time`"
+                    },
+                    {
+                      "name": "device_id",
+                      "expression": "`device_id`"
+                    },
+                    {
+                      "name": "site",
+                      "expression": "`site`"
+                    },
+                    {
+                      "name": "sensor_type",
+                      "expression": "`sensor_type`"
+                    },
+                    {
+                      "name": "reading_value",
+                      "expression": "`reading_value`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "event_time",
+                    "type": "datetime",
+                    "displayName": "Event time"
+                  },
+                  {
+                    "fieldName": "device_id",
+                    "displayName": "Device"
+                  },
+                  {
+                    "fieldName": "site",
+                    "displayName": "Site"
+                  },
+                  {
+                    "fieldName": "sensor_type",
+                    "displayName": "Sensor"
+                  },
+                  {
+                    "fieldName": "reading_value",
+                    "displayName": "Value"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Status"
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Recent anomalies",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 11,
+            "width": 8,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#FAFAFB",
+        "dark": "#1F272D"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "widgetBorderColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "fontColor": {
+        "light": "#000000",
+        "dark": "#F30000"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "visualizationColors": [
+        "#077A9D",
+        "#FFAB00",
+        "#00A972",
+        "#FF3621",
+        "#8BCAE7",
+        "#AB4057",
+        "#99DDB4",
+        "#FCA4A1",
+        "#919191",
+        "#BF7080",
+        "#077A9D"
+      ],
+      "widgetHeaderAlignment": "CENTER"
+    },
+    "applyModeEnabled": false
+  }
+}

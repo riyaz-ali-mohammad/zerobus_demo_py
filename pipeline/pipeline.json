@@ -1,0 +1,20 @@
+{
+  "name": "zerobus_iot_demo",
+  "edition": "ADVANCED",
+  "continuous": true,
+  "serverless": true,
+  "catalog": "karthik_auto_validator_1",
+  "target": "iot",
+  "libraries": [
+    {
+      "file": {
+        "path": "/Workspace/Shared/zerobus_demo/sensor_pipeline.py"
+      }
+    }
+  ],
+  "configuration": {
+    "pipelines.enableMaterializedViewStreaming": "true"
+  },
+  "channel": "CURRENT",
+  "development": true
+}
